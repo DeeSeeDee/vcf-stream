@@ -1,5 +1,4 @@
 const fs = require('fs'),
-	path = require('path'),
 	byline = require('byline'),
 	EventEmitter = require('events');
 
@@ -13,7 +12,12 @@ class VCFStream extends EventEmitter{
 		}
 		var self = this;
 		this.header = [];
-		console.log(this.header);
+		this.headerDone = false;
+		/*
+			This bind statement facilitates removing the event listener 
+			after the header has been processed.
+		*/
+		this.headerParse = this.headerParse.bind(this);
 		/**
 			The "variants" property stores variants by contig
 		*/
@@ -36,7 +40,7 @@ class VCFStream extends EventEmitter{
 		/**
 			Automatically read in the header, and then pause
 		*/
-		this.stream.on('data', this.headerParse.bind(this));
+		this.stream.on('data', this.headerParse);
 		
 		this.stream.on('end', function(){
 			console.log('Stream is done');
@@ -53,34 +57,68 @@ class VCFStream extends EventEmitter{
 	
 	headerParse(line){
 		var self = this;
-		console.log(line);
+		//Check to make sure VCF is valid.
+		if(line && !this.header.length && !line.startsWith('#')){
+			throw {
+				name: 'FiletypeError',
+				message: 'This does not appear to be a VCF file.'
+			};
+		}
+		this.header.push(line);
+		//Check if we're on the last line of the header.
 		if(line.startsWith('#CHROM')){
-			//This is the last line of the header.
 			line.split('\t').splice(9).forEach(function(samp){
 				self.samples.push(samp);
 			});
 			this.stream.pause();
-			this.stream.removeListener('data', self.headerParse);
-			this.stream.addListener('data', self.variantParse);
+			this.removeHeaderListener();
+			this.stream.on('data', self.variantParse.bind(self));
 			this.emit('header');
 			console.log('header');
 			return;
 		}
-		if(line && !this.header.length && !line.startsWith('#')){
-			throw('This does not appear to be a VCF file.');
+		
+		//store contig information
+		if(line.startsWith('##contig')){
+			let headerParts = processHeaderField(line);
+			let contig = headerParts[0][1];
+			this.contigs[contig] = parseInt(headerParts[1][1]);
+			this.variants[contig] = [];
+			return;
 		}
-		this.header.push(line);
+		
 	}
 	
 	variantParse(line){
-		console.log('yip');
+		let contig = line.split('\t')[0];
+		if(!this.variants.hasOwnProperty(contig)){
+				throw {
+					name: 'FormatError',
+					message: `Unexpected contig ${contig} found in variant data`
+				}
+		}
+		this.variants[contig].push(line);
+	}
+	
+	removeHeaderListener(){
+		this.headerDone = true;
+		this.stream.removeListener('data', this.headerParse);
 	}
 	
 	get allVariants(){
-		return Object.keys(this.variants).reduce(function(key){
-			variants = variants.concat(this.variants[key])
-		 }, []);
-	}	
+		var variants = [];
+		var self = this;
+		Object.keys(this.variants).forEach(function(chrom){
+			variants = variants.concat(self.variants[chrom]);
+		});
+		return variants;
+	}
+}
+
+function processHeaderField(headerLine){
+	return headerLine.replace(/>/, '').split('<')[1].split(',').map(function(unit){
+		return unit.split('=');
+	});
 }
 
 module.exports = VCFStream;
