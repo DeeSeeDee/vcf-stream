@@ -1,0 +1,20 @@
+{
+  "name": "vcf-stream",
+  "version": "0.0.1",
+  "description": "A library to facilitate streaming of VCF data.",
+  "main": "index.js",
+  "scripts": {
+    "test": "nodeunit test"
+  },
+  "keywords": [
+    "variant",
+    "genomics",
+    "science",
+    "vcf"
+  ],
+  "author": "Dan Dorset",
+  "license": "ISC",
+  "dependencies": {
+    "byline": "^5.0.0"
+  }
+}
