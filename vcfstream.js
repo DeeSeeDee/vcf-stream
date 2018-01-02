@@ -12,7 +12,6 @@ class VCFStream extends EventEmitter{
 		}
 		var self = this;
 		this.header = [];
-		this.headerDone = false;
 		/*
 			This bind statement facilitates removing the event listener 
 			after the header has been processed.
@@ -29,10 +28,28 @@ class VCFStream extends EventEmitter{
 		this.contigs = {};
 		
 		/**
+			The formats property stores data about the FORMAT fields of
+			each variant, based on the information from the header.
+		*/
+		this.formats = {};
+		
+		/**
+			The info property stores data about the INFO fields of
+			each variant, based on the information from the header.
+		*/
+		this.info = {};
+		
+		/**
 			This array stores the sample names in the order 
 			which they appear in the header line.
 		*/
 		this.samples = [];
+		
+		/**
+			A collection of filters to apply to variants being streamed.
+			If a variant fails, it's not added to the collection.
+		*/
+		this.filters = [];
 		
 		this.stream = byline.createStream(fs.createReadStream(
 			vcfPath, { encoding: 'utf8' }));
@@ -71,7 +88,7 @@ class VCFStream extends EventEmitter{
 				self.samples.push(samp);
 			});
 			this.stream.pause();
-			this.removeHeaderListener();
+			this.stream.removeListener('data', this.headerParse);
 			this.stream.on('data', self.variantParse.bind(self));
 			this.emit('header');
 			console.log('header');
@@ -87,6 +104,15 @@ class VCFStream extends EventEmitter{
 			return;
 		}
 		
+		if(line.startsWith('##FORMAT')){
+			let headerParts = processHeaderField(line);
+			this.formats[headerParts[0][1]] = {
+				number: headerParts[1][0],
+				type: headerParts[2][1],
+				description: headerParts[1][1]
+			}
+		}
+		
 	}
 	
 	variantParse(line){
@@ -98,11 +124,6 @@ class VCFStream extends EventEmitter{
 				}
 		}
 		this.variants[contig].push(line);
-	}
-	
-	removeHeaderListener(){
-		this.headerDone = true;
-		this.stream.removeListener('data', this.headerParse);
 	}
 	
 	get allVariants(){
@@ -119,6 +140,10 @@ function processHeaderField(headerLine){
 	return headerLine.replace(/>/, '').split('<')[1].split(',').map(function(unit){
 		return unit.split('=');
 	});
+}
+
+function passFilters(variant){
+	return variant.passing(this.filters);
 }
 
 module.exports = VCFStream;
