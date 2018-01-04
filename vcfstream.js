@@ -1,6 +1,7 @@
 const fs = require('fs'),
 	byline = require('byline'),
-	EventEmitter = require('events');
+	EventEmitter = require('events'),
+	Variant = require('./variant.js');
 
 class VCFStream extends EventEmitter{
 	
@@ -60,7 +61,6 @@ class VCFStream extends EventEmitter{
 		this.stream.on('data', this.headerParse);
 		
 		this.stream.on('end', function(){
-			console.log('Stream is done');
 			self.emit('end');
 		});
 	}
@@ -70,6 +70,13 @@ class VCFStream extends EventEmitter{
 	*/
 	resume(){
 		this.stream.resume();
+	}
+	
+	/**
+		pass-through method to native stream "pause" method
+	*/
+	pause(){
+		this.stream.pause();
 	}
 	
 	headerParse(line){
@@ -82,7 +89,13 @@ class VCFStream extends EventEmitter{
 			};
 		}
 		this.header.push(line);
-		//Check if we're on the last line of the header.
+		/**
+			Check if we're on the last line of the header.
+			If so, capture the sample names from the line and 
+			then halt the stream, switch over to processing 
+			lines as variants, and notify that the header has
+			been processed.
+		*/
 		if(line.startsWith('#CHROM')){
 			line.split('\t').splice(9).forEach(function(samp){
 				self.samples.push(samp);
@@ -91,7 +104,6 @@ class VCFStream extends EventEmitter{
 			this.stream.removeListener('data', this.headerParse);
 			this.stream.on('data', self.variantParse.bind(self));
 			this.emit('header');
-			console.log('header');
 			return;
 		}
 		
@@ -107,23 +119,33 @@ class VCFStream extends EventEmitter{
 		if(line.startsWith('##FORMAT')){
 			let headerParts = processHeaderField(line);
 			this.formats[headerParts[0][1]] = {
-				number: headerParts[1][0],
+				number: headerParts[1][1],
 				type: headerParts[2][1],
 				description: headerParts[1][1]
-			}
+			};
 		}
 		
+		if(line.startsWith('##INFO')){
+			let headerParts = processHeaderField(line);
+			this.info[headerParts[0][1]] = {
+				number: headerParts[1][1],
+				type: headerParts[2][1],
+				description: headerParts[1][1]
+			};
+		}
 	}
 	
 	variantParse(line){
-		let contig = line.split('\t')[0];
+		let fields = line.split('\t');
+		let contig = fields[0];
 		if(!this.variants.hasOwnProperty(contig)){
-				throw {
-					name: 'FormatError',
-					message: `Unexpected contig ${contig} found in variant data`
-				}
+			throw {
+				name: 'FormatError',
+				message: `Unexpected contig ${contig} found in variant data`
+			};
 		}
-		this.variants[contig].push(line);
+		this.variants[contig].push(new Variant(fields, this.samples, 
+			this.formats, this.info, this.contigs[contig]));
 	}
 	
 	get allVariants(){
@@ -137,13 +159,15 @@ class VCFStream extends EventEmitter{
 }
 
 function processHeaderField(headerLine){
-	return headerLine.replace(/>/, '').split('<')[1].split(',').map(function(unit){
+	var interiorSection = headerLine.replace(/>/, '').split('<')[1];
+	//Split on commas, ignoring commas in quotes
+	var headerParts = interiorSection.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+	if(!headerParts.length){
+		headerParts = [interiorSection];
+	}
+	return headerParts.map(function(unit){
 		return unit.split('=');
 	});
-}
-
-function passFilters(variant){
-	return variant.passing(this.filters);
 }
 
 module.exports = VCFStream;

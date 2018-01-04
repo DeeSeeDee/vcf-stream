@@ -1,10 +1,24 @@
 class Variant{
 	
-	constructor(fields, samples, contigLength){
+	/**
+		The Variant constructor takes an array of fields. 
+		The easiest way is to split the variant line on tabs.
+		For example: variantTextLine.split('\t')
+		It also takes an array of sample names in the order
+		in which they appear in the VCF header, as well as the
+		length of the contig (chromosome) on which the variant occurs.
+	*/
+	constructor(fields, samples, formatTypes, infoTypes, contigLength){
 		this.fields = fields;
 		this.contig = this.fields[0];
 		this.position = parseInt(fields[1], 10) || 0;
-		this.telomere = this.position === 0 || this.position > contigLength;
+		if(this.position > contigLength + 1){
+			throw {
+				name: 'VariantError',
+				message: `Variant position ${this.position} is nonsensical given contig length ${contigLength}`
+			};
+		}
+		this.telomere = this.position === 0 || this.position === contigLength + 1;
 		this.identifiers = fields[2].split(';');
 		this.ref = fields[3];
 		this.alt = fields[4];
@@ -13,7 +27,36 @@ class Variant{
 		this.info = {}; 
 		fields[7].split(';').forEach((infoField) => {
 			let infoParts = infoField.split('=');
-			this.info[infoParts[0]] = infoParts[1];
+			switch (infoTypes[infoParts[0]].type){
+				case 'Flag':
+					this.info[infoParts[0]] = true;
+					break;
+				case 'Integer':
+					if (infoTypes[infoParts[0]].number === '1'){
+						this.info[infoParts[0]] = parseInt(infoParts[1]) || 0;
+					} else {
+						this.info[infoParts[0]] = infoParts[1].split(',').map((val) => {
+							return parseInt(val) || 0;
+						});
+					}
+					break;
+				case 'Float':
+					if (infoTypes[infoParts[0]].number === '1'){
+						this.info[infoParts[0]] = parseFloat(infoParts[1]) || 0;
+					} else {
+						this.info[infoParts[0]] = infoParts[1].split(',').map((val) => {
+							return parseFloat(val) || 0;
+						});
+					}
+					break;
+				default:
+					if (infoTypes[infoParts[0]].number === '1'){
+						this.info[infoParts[0]] = parseInt(infoParts[1]) || 0;
+					} else {
+						this.info[infoParts[0]] = infoParts[1].split(',');
+					}
+					break;
+			}
 		});
 		this.format = {};
 		let formatFields = fields[8].split(':');
@@ -23,21 +66,59 @@ class Variant{
 			let sampleValues = sf.split(':');
 			this.format[samples[sampleIndex]] = {};
 			formatFields.forEach((ff, index) => {
-				self.format[samples[sampleIndex]][ff] = sampleValues[index];
-			})
+				switch (formatTypes[ff].type){
+					case 'Integer':
+						if (formatTypes[ff].number === '1'){
+							self.format[samples[sampleIndex]][ff] = 
+								parseInt(sampleValues[index]) || 0;
+						} else {
+							self.format[samples[sampleIndex]][ff] = sampleValues[index]
+								.split(',').map((val) => {
+									return parseInt(val) || 0;
+								});
+						}
+						break;
+					case 'Float':
+						if (formatTypes[ff].number === '1'){
+							self.format[samples[sampleIndex]][ff] = 
+								parseFloat(sampleValues[index]) || 0;
+						} else {
+							self.format[samples[sampleIndex]][ff] = sampleValues[index]
+								.split(',').map((val) => {
+									return parseFloat(val) || 0;
+								});
+						}
+						break;
+					default:
+						//String or Character
+						if (formatTypes[ff].number === '1'){
+							self.format[samples[sampleIndex]][ff] = sampleValues[index];
+						} else {
+							self.format[samples[sampleIndex]][ff] = sampleValues[index].split(',');
+						}
+						break;
+				}
+				
+			});
 		});
 	}
 	
 	get isRef(){
-		return this.Alt === '.';	
+		return this.alt === '.';	
 	}
 	
 	get isSNP(){
-		return this.ref.length === 1 && this.alt.length === 1;	
+		return this.isRef === false && this.ref.length === 1 
+			&& this.alt.length === 1;	
 	}
 	
+	/**
+		Catch the relatively unusual multinucleotide polymorphism, 
+		which is created by some variant callers. 
+	*/
 	get isMNP(){
-		return this.ref.length > 1 && this.alt.length > 1 && this.ref.length === this.alt.length;
+		return this.ref.length > 1 && this.alt.length > 1 
+			&& this.ref.length === this.alt.length;
 	}
 	
 	get hasIdentifier(){
@@ -45,7 +126,7 @@ class Variant{
 	}
 	
 	get hasdbSNP(){
-		return this.hasIdentifier && this.identifers.some((id) => {
+		return this.hasIdentifier && this.identifiers.some((id) => {
 			return id.toLowerCase().startsWith('rs');
 		});
 	}
@@ -68,6 +149,13 @@ class Variant{
 	
 	get simpleContig(){
 		return this.contig.replace(/^chr/, '');
+	}
+	
+	/**
+		Alias of contig property.
+	*/
+	get chrom(){
+		return this.contig;
 	}
 }
 
