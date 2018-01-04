@@ -42,3 +42,47 @@ exports.testVariantStreamSimple = function(test){
 		test.done();
 	});
 };
+
+exports.testVariantStreamWithFilter = function(test){
+	/**
+		This time read the entire variant stream for a truncated, 
+		simple variant file.
+	*/
+	var vStream = new VCFStream('./test/SL281349.head.vcf');
+	vStream.addPositionFilter('chr1', 20304, 40000);
+	vStream.once('header', function(){
+		vStream.resume();
+	});
+	vStream.on('end', function(){
+		test.expect(3);
+		test.equal(vStream.variants['chr1'].length, 8,
+			'The expected number of specific, position-filtered contig variants is returned for chr1.');
+		test.equal(vStream.variants['chr2'].length, 0,
+			'No filtered variants should be returned for chr2.');
+		test.equal(vStream.allVariants.length, 8,
+			'The expected number of total variants is returned.');
+		test.done();
+	});
+};
+
+exports.testVariantStreamWithFilterOpen = function(test){
+	/**
+		This time read the entire variant stream for a truncated, 
+		simple variant file.
+	*/
+	var vStream = new VCFStream('./test/SL281349.head.vcf');
+	vStream.addPositionFilter('chr1', 237800);
+	vStream.once('header', function(){
+		vStream.resume();
+	});
+	vStream.on('end', function(){
+		test.expect(3);
+		test.equal(vStream.variants['chr1'].length, 9,
+			'The expected number of specific, position-filtered contig variants is returned for chr1.');
+		test.equal(vStream.variants['chr2'].length, 0,
+			'No filtered variants should be returned for chr2.');
+		test.equal(vStream.allVariants.length, 9,
+			'The expected number of total variants is returned.');
+		test.done();
+	});
+};

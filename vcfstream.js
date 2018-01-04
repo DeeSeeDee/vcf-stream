@@ -47,6 +47,11 @@ class VCFStream extends EventEmitter{
 		this.samples = [];
 		
 		/**
+			This array stores the position range filters
+		*/
+		this.ranges = [];
+		
+		/**
 			A collection of filters to apply to variants being streamed.
 			If a variant fails, it's not added to the collection.
 		*/
@@ -144,8 +149,37 @@ class VCFStream extends EventEmitter{
 				message: `Unexpected contig ${contig} found in variant data`
 			};
 		}
-		this.variants[contig].push(new Variant(fields, this.samples, 
-			this.formats, this.info, this.contigs[contig]));
+		var newVariant = new Variant(fields, this.samples, 
+			this.formats, this.info, this.contigs[contig]);
+		var failedFilters = false;
+		if(this.ranges.length){
+			if(!this.ranges.filter((range) => {
+				return contig === range.chrom;
+			}).some((range) => {
+				if(range.endPos){
+					return newVariant.position >= range.startPos 
+						&& newVariant.position <= range.endPos;
+				} else {
+					return newVariant.position >= range.startPos;
+				}
+			})){
+				failedFilters = true;
+			}
+		}
+		if(!failedFilters){
+			this.variants[contig].push(newVariant);
+		}
+	}
+	
+	addPositionFilter(chrom, startPos, endPos){
+		var filterData = {
+			chrom: chrom,
+			startPos: parseInt(startPos) || 0
+		}
+		if(endPos){
+			filterData['endPos'] = parseInt(endPos) || 0;
+		}
+		this.ranges.push(filterData);
 	}
 	
 	get allVariants(){
