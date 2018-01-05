@@ -152,6 +152,7 @@ class VCFStream extends EventEmitter{
 		var newVariant = new Variant(fields, this.samples, 
 			this.formats, this.info, this.contigs[contig]);
 		var failedFilters = false;
+		//Check position ranges
 		if(this.ranges.length){
 			if(!this.ranges.filter((range) => {
 				return contig === range.chrom;
@@ -166,12 +167,20 @@ class VCFStream extends EventEmitter{
 				failedFilters = true;
 			}
 		}
+		//Check filters
+		if(!failedFilters && this.filters.length){
+			if(!this.filters.every((filter) => {
+				return filter.call(this, newVariant);
+			})){
+				failedFilters = true;
+			}
+		}
 		if(!failedFilters){
 			this.variants[contig].push(newVariant);
 		}
 	}
 	
-	addPositionFilter(chrom, startPos, endPos){
+	addRange(chrom, startPos, endPos){
 		var filterData = {
 			chrom: chrom,
 			startPos: parseInt(startPos) || 0
@@ -180,6 +189,29 @@ class VCFStream extends EventEmitter{
 			filterData['endPos'] = parseInt(endPos) || 0;
 		}
 		this.ranges.push(filterData);
+	}
+	
+	addInfoFlagFilter(flagName, flagPresent){
+			flagName = flagName.toUpperCase();
+			if(!this.info.hasOwnProperty(flagName)){
+				throw {
+					name: 'FilterException',
+					message: `The INFO field ${flagName} was not found in the VCF header`
+				};
+			}
+			/**
+				If `flagPresent` is truthy, the flag must be set on a variant
+				Otherwise, the flag must be absent for the variant being examined.
+			*/
+			if(flagPresent){
+				this.filters.push(function(variant){
+					return variant.info.hasOwnProperty(flagName);
+				});
+			} else {
+				this.filters.push(function(variant){
+					return !variant.info.hasOwnProperty(flagName);
+				});
+			}
 	}
 	
 	get allVariants(){

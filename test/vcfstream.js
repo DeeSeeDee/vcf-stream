@@ -43,13 +43,12 @@ exports.testVariantStreamSimple = function(test){
 	});
 };
 
-exports.testVariantStreamWithFilter = function(test){
+exports.testVariantStreamWithRange = function(test){
 	/**
-		This time read the entire variant stream for a truncated, 
-		simple variant file.
+		Apply a range filter with a defined start and end.
 	*/
 	var vStream = new VCFStream('./test/SL281349.head.vcf');
-	vStream.addPositionFilter('chr1', 20304, 40000);
+	vStream.addRange('chr1', 20304, 40000);
 	vStream.once('header', function(){
 		vStream.resume();
 	});
@@ -65,13 +64,12 @@ exports.testVariantStreamWithFilter = function(test){
 	});
 };
 
-exports.testVariantStreamWithFilterOpen = function(test){
+exports.testVariantStreamWithRangeOpen = function(test){
 	/**
-		This time read the entire variant stream for a truncated, 
-		simple variant file.
+		Apply a range filter with a defined start and no end.
 	*/
 	var vStream = new VCFStream('./test/SL281349.head.vcf');
-	vStream.addPositionFilter('chr1', 237800);
+	vStream.addRange('chr1', 237800);
 	vStream.once('header', function(){
 		vStream.resume();
 	});
@@ -83,6 +81,22 @@ exports.testVariantStreamWithFilterOpen = function(test){
 			'No filtered variants should be returned for chr2.');
 		test.equal(vStream.allVariants.length, 9,
 			'The expected number of total variants is returned.');
+		test.done();
+	});
+};
+
+exports.testVariantStreamWithInfoFlagFilter = function(test){
+	/**
+		Apply an info flag filter ("DB" in this case).
+	*/
+	var vStream = new VCFStream('./test/SL281349.head.vcf');
+	vStream.once('header', function(){
+		vStream.addInfoFlagFilter('DB', true);
+		vStream.resume();
+	});
+	vStream.on('end', function(){
+		test.expect(1);
+		test.equal(vStream.allVariants.length, 46, 'Filtering on INFO flag.');
 		test.done();
 	});
 };
