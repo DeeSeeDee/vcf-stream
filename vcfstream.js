@@ -199,6 +199,12 @@ class VCFStream extends EventEmitter{
 					message: `The INFO field ${flagName} was not found in the VCF header`
 				};
 			}
+			if(!this.info[flagName].Type !== 'Flag'){
+				throw {
+					name: 'FilterException',
+					message: `The INFO field ${flagName} is not a "Flag" type`
+				};
+			}
 			/**
 				If `flagPresent` is truthy, the flag must be set on a variant
 				Otherwise, the flag must be absent for the variant being examined.
