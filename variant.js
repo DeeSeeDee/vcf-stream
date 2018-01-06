@@ -51,7 +51,7 @@ class Variant{
 					break;
 				default:
 					if (infoTypes[infoParts[0]].number === '1'){
-						this.info[infoParts[0]] = parseInt(infoParts[1]) || 0;
+						this.info[infoParts[0]] = infoParts[1].toString();
 					} else {
 						this.info[infoParts[0]] = infoParts[1].split(',');
 					}
@@ -92,7 +92,7 @@ class Variant{
 					default:
 						//String or Character
 						if (formatTypes[ff].number === '1'){
-							self.format[samples[sampleIndex]][ff] = sampleValues[index];
+							self.format[samples[sampleIndex]][ff] = sampleValues[index].toString();
 						} else {
 							self.format[samples[sampleIndex]][ff] = sampleValues[index].split(',');
 						}

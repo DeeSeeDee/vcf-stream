@@ -61,7 +61,7 @@ class VCFStream extends EventEmitter{
 			vcfPath, { encoding: 'utf8' }));
 		
 		/**
-			Automatically read in the header, and then pause
+			Automatically process the header, and then pause
 		*/
 		this.stream.on('data', this.headerParse);
 		
@@ -71,14 +71,14 @@ class VCFStream extends EventEmitter{
 	}
 
 	/**
-		pass-through method to native stream "resume" method
+		pass-through method to native stream "resume"
 	*/
 	resume(){
 		this.stream.resume();
 	}
 	
 	/**
-		pass-through method to native stream "pause" method
+		pass-through method to native stream "pause"
 	*/
 	pause(){
 		this.stream.pause();
@@ -177,6 +177,7 @@ class VCFStream extends EventEmitter{
 		}
 		if(!failedFilters){
 			this.variants[contig].push(newVariant);
+			this.emit('variant');
 		}
 	}
 	
@@ -184,7 +185,7 @@ class VCFStream extends EventEmitter{
 		var filterData = {
 			chrom: chrom,
 			startPos: parseInt(startPos) || 0
-		}
+		};
 		if(endPos){
 			filterData['endPos'] = parseInt(endPos) || 0;
 		}
@@ -192,32 +193,170 @@ class VCFStream extends EventEmitter{
 	}
 	
 	addInfoFlagFilter(flagName, flagPresent){
-			flagName = flagName.toUpperCase();
-			if(!this.info.hasOwnProperty(flagName)){
+		flagName = flagName.toUpperCase();
+		if(!this.info.hasOwnProperty(flagName)){
+			throw {
+				name: 'FilterException',
+				message: `The INFO field ${flagName} was not found in the VCF header`
+			};
+		}
+		if(this.info[flagName].type !== 'Flag'){
+			throw {
+				name: 'FilterException',
+				message: `The INFO field ${flagName} is not a "Flag" type`
+			};
+		}
+		/**
+			If `flagPresent` is truthy, the flag must be set on a variant
+			Otherwise, the flag must be absent for the variant being examined.
+		*/
+		if(flagPresent){
+			this.filters.push(function(variant){
+				return variant.info.hasOwnProperty(flagName);
+			});
+		} else {
+			this.filters.push(function(variant){
+				return !variant.info.hasOwnProperty(flagName);
+			});
+		}
+	}
+		
+	addInfoRangeFilter(infoProp, lowVal, highVal){
+		infoProp = infoProp.toUpperCase();
+		if(!this.info.hasOwnProperty(infoProp)){
+			throw {
+				name: 'FilterException',
+				message: `The INFO field ${infoProp} was not found in the VCF header`
+			};
+		}
+		if(['Integer', 'Float'].indexOf(this.info[infoProp].type) === -1){
+			throw {
+				name: 'FilterException',
+				message: `The INFO field ${infoProp} is not a numeric type`
+			};
+		}
+		lowVal = parseFloat(lowVal) || 0;
+		if(highVal){
+			highVal = parseFloat(highVal) || 0;
+		}
+		if(highVal){
+			this.filters.push(function(variant){
+				return variant.info[infoProp] >= lowVal && variant.info[infoProp] <= highVal;
+			});
+		} else {
+			this.filters.push(function(variant){
+				return variant.info[infoProp] >= lowVal;
+			});
+		}
+	}
+		
+	/**
+		Filter by string content. Takes an object as its argument, 
+			with the following properties:
+		string: Required. String. The string for which to perform the match.
+		infoProperty: Required. String. The INFO property on which to perform
+			the string match. This must be present in the header of the VCF, or an
+			Exception object with name "FilterException" will be thrown.
+		exact: Optional. Boolean. if truthy, the string much match exactly, both in case 
+			and content. Otherwise, a case-insensitive check for the presence of 
+			the 'string' value will be performed.
+		inverse: Optional. Boolean. If this is truthy, it will pass variants 
+			which do NOT have the string present. This is considered only when the
+			INFO "Number" property is "1"
+		matchType: Optional. String. Applies only to INFO field values where the Number is 
+			something other than "1". Can have one of three values:			
+			'all': (Default) All items must meet the match criteria.
+			'any': At least one item must meet the match criteria.
+			'none': None of the items can meet the match criteria. 
+	*/
+	addInfoStringFilter(filterProps){
+		['string', 'infoProperty'].forEach((reqProp) => {
+			if(!filterProps.hasOwnProperty(reqProp)){
 				throw {
 					name: 'FilterException',
-					message: `The INFO field ${flagName} was not found in the VCF header`
-				};
+					message: `The required property ${reqProp} is missing.`
+				}
 			}
-			if(!this.info[flagName].Type !== 'Flag'){
-				throw {
-					name: 'FilterException',
-					message: `The INFO field ${flagName} is not a "Flag" type`
-				};
-			}
-			/**
-				If `flagPresent` is truthy, the flag must be set on a variant
-				Otherwise, the flag must be absent for the variant being examined.
-			*/
-			if(flagPresent){
-				this.filters.push(function(variant){
-					return variant.info.hasOwnProperty(flagName);
+		});
+		let infoProp = filterProps.infoProperty.toUpperCase();
+		if(!this.info.hasOwnProperty(infoProp)){
+			throw {
+				name: 'FilterException',
+				message: `The INFO field ${infoProp} was not found in the VCF header`
+			};
+		}
+		if(this.info[infoProp].type !== 'String'){
+			throw {
+				name: 'FilterException',
+				message: `The INFO field ${infoProp} is not a "String" type`
+			};
+		}
+		if(this.info[infoProp].number == '1'){
+			let coercedBool = Boolean(filterProps.inverse);
+			if(filterProps.exact){
+				this.filters.push((variant) => {
+					return (variant.info[infoProp] === filterProps.string) !== coercedBool;
 				});
 			} else {
-				this.filters.push(function(variant){
-					return !variant.info.hasOwnProperty(flagName);
+				this.filters.push((variant) => {
+					return (variant.info[infoProp].toLowerCase()
+						.indexOf(filterProps.string.toLowerCase()) === -1) 
+						!== coercedBool;
 				});
 			}
+		} else {
+			if(filterProps.exact){
+				switch(filterProps.match.toLowerCase()){
+					case 'none':
+						this.filters.push((variant) => {
+							return variant.info[infoProp].every((infoVal) => {
+								return infoVal !== filterProps.string;
+							});
+						});
+						break;
+					case 'any':
+						this.filters.push((variant) => {
+							return variant.info[infoProp].some((infoVal) => {
+								return infoVal === filterProps.string;
+							});
+						});
+						break;
+					default:
+						//default to 'all'
+						this.filters.push((variant) => {
+							return variant.info[infoProp].every((infoVal) => {
+								return infoVal === filterProps.string;
+							});
+						});
+						break;
+				}
+			} else {
+				switch(filterProps.match.toLowerCase()){
+					case 'none':
+						this.filters.push((variant) => {
+							return variant.info[infoProp].every((infoVal) => {
+								return infoVal.indexOf(filterProps.string) === -1;
+							});
+						});
+						break;
+					case 'any':
+						this.filters.push((variant) => {
+							return variant.info[infoProp].some((infoVal) => {
+								return infoVal.indexOf(filterProps.string) !== -1;
+							});
+						});
+						break;
+					default:
+						//default to 'all'
+						this.filters.push((variant) => {
+							return variant.info[infoProp].every((infoVal) => {
+								return infoVal.indexOf(filterProps.string) !== -1;
+							});
+						});
+						break;
+				}
+			}
+		}
 	}
 	
 	get allVariants(){

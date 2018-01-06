@@ -100,3 +100,70 @@ exports.testVariantStreamWithInfoFlagFilter = function(test){
 		test.done();
 	});
 };
+
+exports.testVariantStreamWithInfoFlagFilterInverse = function(test){
+	/**
+		Apply an info flag filter ("DB" in this case), but for the absence of the flag.
+	*/
+	var vStream = new VCFStream('./test/SL281349.head.vcf');
+	vStream.once('header', function(){
+		vStream.addInfoFlagFilter('DB');
+		vStream.resume();
+	});
+	vStream.on('end', function(){
+		test.expect(1);
+		test.equal(vStream.allVariants.length, 104, 'Filtering on INFO flag.');
+		test.done();
+	});
+};
+
+exports.testVariantStreamWithInfoRangeFilter = function(test){
+	/**
+		Apply an info flag filter ("DB" in this case), but for the absence of the flag.
+	*/
+	var vStream = new VCFStream('./test/SL281349.head.vcf');
+	vStream.once('header', function(){
+		vStream.addInfoRangeFilter('DP', 50);
+		vStream.resume();
+	});
+	vStream.on('end', function(){
+		test.expect(1);
+		test.equal(vStream.allVariants.length, 19, 'Filtering on INFO flag.');
+		test.done();
+	});
+};
+
+exports.testVariantStreamWithInfoRangeFilterBoth = function(test){
+	/**
+		Apply an info flag filter ("DB" in this case), but for the absence of the flag.
+	*/
+	var vStream = new VCFStream('./test/SL281349.head.vcf');
+	vStream.once('header', function(){
+		vStream.addInfoRangeFilter('DP', 0, 10);
+		vStream.resume();
+	});
+	vStream.on('end', function(){
+		test.expect(1);
+		test.equal(vStream.allVariants.length, 40, 'Filtering on INFO flag.');
+		test.done();
+	});
+};
+
+exports.testVariantStreamWithInfoStringFilter = function(test){
+	/**
+		Apply an info flag filter ("DB" in this case), but for the absence of the flag.
+	*/
+	var vStream = new VCFStream('./test/SL281349.infostring.vcf');
+	vStream.once('header', function(){
+		vStream.addInfoStringFilter({
+			string: 'est',
+			infoProperty: 'ZZ'
+		});
+		vStream.resume();
+	});
+	vStream.on('end', function(){
+		test.expect(1);
+		test.equal(vStream.allVariants.length, 2, 'Filtering on INFO flag.');
+		test.done();
+	});
+};
