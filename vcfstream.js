@@ -254,23 +254,24 @@ class VCFStream extends EventEmitter{
 		Filter by string content. Takes an object as its argument, 
 			with the following properties:
 		string: Required. String. The string for which to perform the match.
-		infoProperty: Required. String. The INFO property on which to perform
+		field: Required. String. The INFO property on which to perform
 			the string match. This must be present in the header of the VCF, or an
 			Exception object with name "FilterException" will be thrown.
+		fieldType: Required. String. INFO or FORMAT.
 		exact: Optional. Boolean. if truthy, the string much match exactly, both in case 
 			and content. Otherwise, a case-insensitive check for the presence of 
 			the 'string' value will be performed.
-		inverse: Optional. Boolean. If this is truthy, it will pass variants 
-			which do NOT have the string present. This is considered only when the
-			INFO "Number" property is "1"
 		matchType: Optional. String. Applies only to INFO field values where the Number is 
 			something other than "1". Can have one of three values:			
 			'all': (Default) All items must meet the match criteria.
 			'any': At least one item must meet the match criteria.
 			'none': None of the items can meet the match criteria. 
+		samples: Optional. Array. A list of samples for which to apply the filter. 
+			Samples not in the list will be ignored. If the list is empty or absent, 
+			all	samples will be evaluated. This only applies to a FORMAT filter.
 	*/
-	addInfoStringFilter(filterProps){
-		['string', 'infoProperty'].forEach((reqProp) => {
+	addStringFilter(filterProps){
+		['string', 'field', 'fieldType'].forEach((reqProp) => {
 			if(!filterProps.hasOwnProperty(reqProp)){
 				throw {
 					name: 'FilterException',
@@ -278,85 +279,89 @@ class VCFStream extends EventEmitter{
 				}
 			}
 		});
-		let infoProp = filterProps.infoProperty.toUpperCase();
-		if(!this.info.hasOwnProperty(infoProp)){
+		let field = filterProps.field.toUpperCase();
+		let fieldType = filterProps.fieldType.toLowerCase();
+		let matchType = (filterProps.matchType || 'all').toLowerCase();
+		if(['format', 'info'].indexOf(fieldType) === -1){
 			throw {
 				name: 'FilterException',
-				message: `The INFO field ${infoProp} was not found in the VCF header`
+				message: `Invalid field type ${field} specified.`
 			};
 		}
-		if(this.info[infoProp].type !== 'String'){
+		if(!this[fieldType].hasOwnProperty(field)){
 			throw {
 				name: 'FilterException',
-				message: `The INFO field ${infoProp} is not a "String" type`
+				message: `The ${fieldType} field ${field} was not found in the VCF header`
 			};
 		}
-		if(this.info[infoProp].number == '1'){
-			let coercedBool = Boolean(filterProps.inverse);
-			if(filterProps.exact){
-				this.filters.push((variant) => {
-					return (variant.info[infoProp] === filterProps.string) !== coercedBool;
-				});
-			} else {
-				this.filters.push((variant) => {
-					return (variant.info[infoProp].toLowerCase()
-						.indexOf(filterProps.string.toLowerCase()) === -1) 
-						!== coercedBool;
-				});
+		if(this[fieldType][field].type !== 'String'){
+			throw {
+				name: 'FilterException',
+				message: `The ${fieldType} field ${infoProp} is not a "String" type`
+			};
+		}
+		
+		if(filterProps.exact){
+			switch(matchType){
+				case 'none':
+					this.filters.push((variant) => {
+						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+							return infoVal !== filterProps.string;
+						});
+					});
+					break;
+				case 'any':
+					this.filters.push((variant) => {
+						return variant.fieldValues(fieldType, field, this.samples).some((infoVal) => {
+							return infoVal === filterProps.string;
+						});
+					});
+					break;
+				default:
+					//default to 'all'
+					this.filters.push((variant) => {
+						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+							return infoVal === filterProps.string;
+						});
+					});
+					break;
 			}
 		} else {
-			if(filterProps.exact){
-				switch(filterProps.match.toLowerCase()){
-					case 'none':
-						this.filters.push((variant) => {
-							return variant.info[infoProp].every((infoVal) => {
-								return infoVal !== filterProps.string;
-							});
+			switch(matchType){
+				case 'none':
+					this.filters.push((variant) => {
+						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+							return infoVal.indexOf(filterProps.string) === -1;
 						});
-						break;
-					case 'any':
-						this.filters.push((variant) => {
-							return variant.info[infoProp].some((infoVal) => {
-								return infoVal === filterProps.string;
-							});
+					});
+					break;
+				case 'any':
+					this.filters.push((variant) => {
+						return variant.fieldValues(fieldType, field, this.samples).some((infoVal) => {
+							return infoVal.indexOf(filterProps.string) !== -1;
 						});
-						break;
-					default:
-						//default to 'all'
-						this.filters.push((variant) => {
-							return variant.info[infoProp].every((infoVal) => {
-								return infoVal === filterProps.string;
-							});
+					});
+					break;
+				default:
+					//default to 'all'
+					this.filters.push((variant) => {
+						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+							return infoVal.indexOf(filterProps.string) !== -1;
 						});
-						break;
-				}
-			} else {
-				switch(filterProps.match.toLowerCase()){
-					case 'none':
-						this.filters.push((variant) => {
-							return variant.info[infoProp].every((infoVal) => {
-								return infoVal.indexOf(filterProps.string) === -1;
-							});
-						});
-						break;
-					case 'any':
-						this.filters.push((variant) => {
-							return variant.info[infoProp].some((infoVal) => {
-								return infoVal.indexOf(filterProps.string) !== -1;
-							});
-						});
-						break;
-					default:
-						//default to 'all'
-						this.filters.push((variant) => {
-							return variant.info[infoProp].every((infoVal) => {
-								return infoVal.indexOf(filterProps.string) !== -1;
-							});
-						});
-						break;
-				}
+					});
+					break;
 			}
 		}
+	}
+	
+	addSampleFilter(samples){
+		var newSamples = [];
+		samples.forEach((sample) => {
+			if(this.samples.indexOf(sample) !== -1){
+				newSamples.push(sample);
+			}
+		});
+		this.samples = newSamples;
 	}
 	
 	get allVariants(){

@@ -103,6 +103,27 @@ class Variant{
 		});
 	}
 	
+	fieldValues(fieldType, fieldID, samples){
+		var values = [];
+		if(fieldType == 'info'){
+			if(!Array.isArray(this.info[fieldID])){
+				return [ this.info[fieldID] ];
+			} else {
+				return this.info[fieldID];
+			}
+		}
+		samples.forEach((sample) => {
+			if(Array.isArray(this.format[sample][fieldID])){
+				this.format[sample][fieldID].forEach((fieldVal) => {
+					values.push(fieldVal);
+				});
+			} else {
+				values.push(this.format[sample][fieldID]);
+			}
+		});
+		return values;
+	}
+	
 	get isRef(){
 		return this.alt === '.';	
 	}

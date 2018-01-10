@@ -29,10 +29,11 @@ exports.testBasicVariant = function(test){
 };
 
 exports.testMultiSampleSNPVariant = function(test){
-	test.expect(22);
+	let samples = ['SL281349', 'SL851811'];
+	test.expect(26);
 	let variantLine = 'chrX	51191322	rs8134818	G	C	79.73	HardFilter	AC=1;AF=0.500;AN=2;DP=12;FS=0.000;MQ=44.71;MQRankSum=1.537;QD=6.64;ReadPosRankSum=1.537;SOR=0.991;FractionInformativeReads=0.500	GT:AD:DP:GQ:PL:SB	0/1:3,3:6:99:117,0,128:2,1,1,2	1/1:3,3:6:39:117,0,128:2,1,1,2';
 	let variant = new Variant(variantLine.split('\t'), 
-		['SL281349', 'SL851811'], formatFields, infoFields, 249250621);
+		samples, formatFields, infoFields, 249250621);
 	test.equal(variant.contig, 'chrX', 'Contig is properly captured.');
 	test.deepEqual(variant.simpleContig, 'X', 'Simple contig property.');
 	test.deepEqual(variant.position, 51191322, 'Position accessor has correct type and value.');
@@ -55,6 +56,14 @@ exports.testMultiSampleSNPVariant = function(test){
 	test.deepEqual(variant.info['AF'], [0.5], 'A single info key-value pair.');
 	test.equal(variant.format['SL851811']['GQ'], 39, 'A single format key-value pair.');
 	test.deepEqual(variant.format['SL851811']['AD'], [3,3], 'Another single format key-value pair.');
+	test.deepEqual(variant.fieldValues('format', 'PL', samples), [117,0,128,117,0,128], 
+		'fieldValues method');
+	test.deepEqual(variant.fieldValues('format', 'GT', [samples[0]]), ['0/1'], 
+		'fieldValues method for a single sample genotype');
+	test.deepEqual(variant.fieldValues('info', 'AC', samples), [1], 
+		'fieldValues method for a single integer INFO field');
+	test.deepEqual(variant.fieldValues('info', 'MQ', samples), [44.71], 
+		'fieldValues method for a single float INFO field');
 	test.done();
 };
 

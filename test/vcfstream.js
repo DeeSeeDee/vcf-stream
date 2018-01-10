@@ -151,19 +151,41 @@ exports.testVariantStreamWithInfoRangeFilterBoth = function(test){
 
 exports.testVariantStreamWithInfoStringFilter = function(test){
 	/**
-		Apply an info flag filter ("DB" in this case), but for the absence of the flag.
+		Apply a basic info string filter for a made-up field("ZZ").
 	*/
 	var vStream = new VCFStream('./test/SL281349.infostring.vcf');
 	vStream.once('header', function(){
-		vStream.addInfoStringFilter({
+		vStream.addStringFilter({
+			fieldType: 'info',
 			string: 'est',
-			infoProperty: 'ZZ'
+			field: 'ZZ'
 		});
 		vStream.resume();
 	});
 	vStream.on('end', function(){
 		test.expect(1);
 		test.equal(vStream.allVariants.length, 2, 'Filtering on INFO flag.');
+		test.done();
+	});
+};
+
+exports.testVariantStreamWithInfoStringFilterExact = function(test){
+	/**
+		Apply an exact-match info string filter for a made-up field("ZZ").
+	*/
+	var vStream = new VCFStream('./test/SL281349.infostring.vcf');
+	vStream.once('header', function(){
+		vStream.addStringFilter({
+			fieldType: 'info',
+			string: 'Test',
+			field: 'ZZ',
+			exact: true
+		});
+		vStream.resume();
+	});
+	vStream.on('end', function(){
+		test.expect(1);
+		test.equal(vStream.allVariants.length, 1, 'Filtering on INFO flag, exact match.');
 		test.done();
 	});
 };
