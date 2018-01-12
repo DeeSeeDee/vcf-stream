@@ -47,6 +47,13 @@ class VCFStream extends EventEmitter{
 		this.samples = [];
 		
 		/**
+			This array stores samples to be captured during 
+			a filtering operation, if any.
+			An empty array is ignored during filtering.
+		 */
+		this.samplesFilter = [];
+
+		/**
 			This array stores the position range filters
 		*/
 		this.ranges = [];
@@ -102,8 +109,11 @@ class VCFStream extends EventEmitter{
 			been processed.
 		*/
 		if(line.startsWith('#CHROM')){
-			line.split('\t').splice(9).forEach(function(samp){
-				self.samples.push(samp);
+			line.split('\t').splice(9).forEach( (samp, index) => {
+				this.samples.push({
+					name: samp,
+					index: index	
+				});
 			});
 			this.stream.pause();
 			this.stream.removeListener('data', this.headerParse);
@@ -238,9 +248,6 @@ class VCFStream extends EventEmitter{
 			'all': (Default) All items must meet the match criteria.
 			'any': At least one item must meet the match criteria.
 			'none': None of the items can meet the match criteria. 
-		samples: Optional. Array. A list of samples for which to apply the filter. 
-			Samples not in the list will be ignored. If the list is empty or absent, 
-			all	samples will be evaluated. This only applies to a FORMAT filter.
 	*/
 	addStringFilter(filterProps){
 		['string', 'field', 'fieldType'].forEach((reqProp) => {
@@ -248,7 +255,7 @@ class VCFStream extends EventEmitter{
 				throw {
 					name: 'FilterException',
 					message: `The required property ${reqProp} is missing.`
-				}
+				};
 			}
 		});
 		let field = filterProps.field.toUpperCase();
@@ -269,7 +276,7 @@ class VCFStream extends EventEmitter{
 		if(this[fieldType][field].type !== 'String'){
 			throw {
 				name: 'FilterException',
-				message: `The ${fieldType} field ${infoProp} is not a "String" type`
+				message: `The ${fieldType} field ${field} is not a "String" type`
 			};
 		}
 		
@@ -277,14 +284,14 @@ class VCFStream extends EventEmitter{
 			switch(matchType){
 				case 'none':
 					this.filters.push((variant) => {
-						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+						return variant.fieldValues(fieldType, field, this.samplesFilter).every((infoVal) => {
 							return infoVal !== filterProps.string;
 						});
 					});
 					break;
 				case 'any':
 					this.filters.push((variant) => {
-						return variant.fieldValues(fieldType, field, this.samples).some((infoVal) => {
+						return variant.fieldValues(fieldType, field, this.samplesFilter).some((infoVal) => {
 							return infoVal === filterProps.string;
 						});
 					});
@@ -292,7 +299,7 @@ class VCFStream extends EventEmitter{
 				default:
 					//default to 'all'
 					this.filters.push((variant) => {
-						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+						return variant.fieldValues(fieldType, field, this.samplesFilter).every((infoVal) => {
 							return infoVal === filterProps.string;
 						});
 					});
@@ -302,14 +309,14 @@ class VCFStream extends EventEmitter{
 			switch(matchType){
 				case 'none':
 					this.filters.push((variant) => {
-						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+						return variant.fieldValues(fieldType, field, this.samplesFilter).every((infoVal) => {
 							return infoVal.indexOf(filterProps.string) === -1;
 						});
 					});
 					break;
 				case 'any':
 					this.filters.push((variant) => {
-						return variant.fieldValues(fieldType, field, this.samples).some((infoVal) => {
+						return variant.fieldValues(fieldType, field, this.samplesFilter).some((infoVal) => {
 							return infoVal.indexOf(filterProps.string) !== -1;
 						});
 					});
@@ -317,7 +324,7 @@ class VCFStream extends EventEmitter{
 				default:
 					//default to 'all'
 					this.filters.push((variant) => {
-						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+						return variant.fieldValues(fieldType, field, this.samplesFilter).every((infoVal) => {
 							return infoVal.indexOf(filterProps.string) !== -1;
 						});
 					});
@@ -339,10 +346,7 @@ class VCFStream extends EventEmitter{
 			something other than "1". Can have one of three values:			
 			'all': (Default) All items must meet the match criteria.
 			'any': At least one item must meet the match criteria.
-			'none': None of the items can meet the match criteria. 
-		samples: Optional. Array. A list of samples for which to apply the filter. 
-			Samples not in the list will be ignored. If the list is empty or absent, 
-			all	samples will be evaluated. This only applies to a FORMAT filter.
+			'none': None of the items can meet the match criteria.
 	*/
 	addRangeFilter(filterProps){
 		['lowValue', 'field', 'fieldType'].forEach((reqProp) => {
@@ -350,7 +354,7 @@ class VCFStream extends EventEmitter{
 				throw {
 					name: 'FilterException',
 					message: `The required property ${reqProp} is missing.`
-				}
+				};
 			}
 		});
 		let lowVal = parseInt(filterProps.lowValue) || 0;
@@ -373,7 +377,7 @@ class VCFStream extends EventEmitter{
 		if(['Integer', 'Float'].indexOf(this[fieldType][field].type) === -1){
 			throw {
 				name: 'FilterException',
-				message: `The ${fieldType} field ${infoProp} is not a numeric type`
+				message: `The ${fieldType} field ${field} is not a numeric type`
 			};
 		}
 		
@@ -381,13 +385,13 @@ class VCFStream extends EventEmitter{
 			case 'none':
 				if(highVal){
 					this.filters.push((variant) => {
-						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+						return variant.fieldValues(fieldType, field, this.samplesFilter).every((infoVal) => {
 							return (infoVal < lowVal) || (infoVal > highVal);
 						});
 					});
 				} else {
 					this.filters.push((variant) => {
-						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+						return variant.fieldValues(fieldType, field, this.samplesFilter).every((infoVal) => {
 							return infoVal < lowVal;
 						});
 					});
@@ -396,13 +400,13 @@ class VCFStream extends EventEmitter{
 			case 'any':
 				if(highVal){
 					this.filters.push((variant) => {
-						return variant.fieldValues(fieldType, field, this.samples).some((infoVal) => {
+						return variant.fieldValues(fieldType, field, this.samplesFilter).some((infoVal) => {
 							return infoVal >= lowVal && infoVal <= highVal;
 						});
 					});
 				} else {
 					this.filters.push((variant) => {
-						return variant.fieldValues(fieldType, field, this.samples).some((infoVal) => {
+						return variant.fieldValues(fieldType, field, this.samplesFilter).some((infoVal) => {
 							return infoVal >= lowVal;
 						});
 					});
@@ -412,13 +416,13 @@ class VCFStream extends EventEmitter{
 				//default to 'all'
 				if(highVal){
 					this.filters.push((variant) => {
-						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+						return variant.fieldValues(fieldType, field, this.samplesFilter).every((infoVal) => {
 							return infoVal >= lowVal && infoVal <= highVal;
 						});
 					});
 				} else {
 					this.filters.push((variant) => {
-						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+						return variant.fieldValues(fieldType, field, this.samplesFilter).every((infoVal) => {
 							return infoVal >= lowVal;
 						});
 					});
@@ -430,11 +434,14 @@ class VCFStream extends EventEmitter{
 	addSampleFilter(samples){
 		var newSamples = [];
 		samples.forEach((sample) => {
-			if(this.samples.indexOf(sample) !== -1){
+			let foundSample = this.samples.find(function(s){
+				return s.name == sample;
+			});
+			if(foundSample){
 				newSamples.push(sample);
 			}
 		});
-		this.samples = newSamples;
+		this.samplesFilter = newSamples;
 	}
 	
 	get allVariants(){

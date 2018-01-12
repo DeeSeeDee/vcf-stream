@@ -6,7 +6,7 @@ exports.testVariantStreamHeader = function(test){
 		test.expect(6);
 		test.equal(vStream.samples.length, 1,
 			'The proper number of samples is extracted from the VCF header.');
-		test.equal(vStream.samples[0], 'SL281349',
+		test.equal(vStream.samples[0].name, 'SL281349',
 			'The sample name is properly extracted from the header.');
 		test.deepEqual(vStream.allVariants, [], 
 			'allVariants accessor works as expected.');

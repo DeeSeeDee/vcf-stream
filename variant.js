@@ -67,15 +67,16 @@ class Variant{
 				return;
 			}
 			let sampleValues = sf.split(':');
-			this.format[samples[sampleIndex]] = {};
+			let sampleName = samples[sampleIndex].name;
+			this.format[sampleName] = {};
 			formatFields.forEach((ff, index) => {
 				switch (formatTypes[ff].type){
 					case 'Integer':
 						if (formatTypes[ff].number === '1'){
-							self.format[samples[sampleIndex]][ff] = 
+							self.format[sampleName][ff] = 
 								parseInt(sampleValues[index]) || 0;
 						} else {
-							self.format[samples[sampleIndex]][ff] = sampleValues[index]
+							self.format[sampleName][ff] = sampleValues[index]
 								.split(',').map((val) => {
 									return parseInt(val) || 0;
 								});
@@ -83,10 +84,10 @@ class Variant{
 						break;
 					case 'Float':
 						if (formatTypes[ff].number === '1'){
-							self.format[samples[sampleIndex]][ff] = 
+							self.format[sampleName][ff] = 
 								parseFloat(sampleValues[index]) || 0;
 						} else {
-							self.format[samples[sampleIndex]][ff] = sampleValues[index]
+							self.format[sampleName][ff] = sampleValues[index]
 								.split(',').map((val) => {
 									return parseFloat(val) || 0;
 								});
@@ -95,15 +96,14 @@ class Variant{
 					default:
 						//String or Character
 						if (formatTypes[ff].number === '1'){
-							self.format[samples[sampleIndex]][ff] = sampleValues[index].toString();
+							self.format[sampleName][ff] = sampleValues[index].toString();
 						} else {
-							self.format[samples[sampleIndex]][ff] = sampleValues[index].split(',');
+							self.format[sampleName][ff] = sampleValues[index].split(',');
 						}
 						break;
 				}
 			});
 		});
-		console.log(this.format);
 	}
 	
 	fieldValues(fieldType, fieldID, samples){
@@ -115,6 +115,9 @@ class Variant{
 				return this.info[fieldID];
 			}
 		}
+		if(!samples.length){
+			samples = Object.keys(this.format);
+		}
 		samples.forEach((sample) => {
 			if(Array.isArray(this.format[sample][fieldID])){
 				this.format[sample][fieldID].forEach((fieldVal) => {
@@ -123,7 +126,7 @@ class Variant{
 			} else {
 				values.push(this.format[sample][fieldID]);
 			}
-		});
+		});		
 		return values;
 	}
 	
