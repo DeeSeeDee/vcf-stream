@@ -63,6 +63,9 @@ class Variant{
 		let sampleFormats = fields.slice(9);
 		let self = this;
 		sampleFormats.forEach((sf, sampleIndex) => {
+			if(!samples[sampleIndex]){
+				return;
+			}
 			let sampleValues = sf.split(':');
 			this.format[samples[sampleIndex]] = {};
 			formatFields.forEach((ff, index) => {
@@ -98,9 +101,9 @@ class Variant{
 						}
 						break;
 				}
-				
 			});
 		});
+		console.log(this.format);
 	}
 	
 	fieldValues(fieldType, fieldID, samples){

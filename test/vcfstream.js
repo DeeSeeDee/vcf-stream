@@ -14,7 +14,7 @@ exports.testVariantStreamHeader = function(test){
 			'contig length is properly captured.');
 		test.ok(vStream.variants.hasOwnProperty('chr22'), 
 			'variant contig is properly captured.');
-		test.equal(vStream.formats['DP'].type, 'Integer',
+		test.equal(vStream.format['DP'].type, 'Integer',
 			'Format "number" is properly captured.');
 		test.done();
 	});	
@@ -123,7 +123,11 @@ exports.testVariantStreamWithInfoRangeFilter = function(test){
 	*/
 	var vStream = new VCFStream('./test/SL281349.head.vcf');
 	vStream.once('header', function(){
-		vStream.addInfoRangeFilter('DP', 50);
+		vStream.addRangeFilter({
+			lowValue: 50,
+			fieldType: 'info',
+			field: 'DP'
+		});
 		vStream.resume();
 	});
 	vStream.on('end', function(){
@@ -139,7 +143,12 @@ exports.testVariantStreamWithInfoRangeFilterBoth = function(test){
 	*/
 	var vStream = new VCFStream('./test/SL281349.head.vcf');
 	vStream.once('header', function(){
-		vStream.addInfoRangeFilter('DP', 0, 10);
+		vStream.addRangeFilter({
+			lowValue: 0,
+			highValue: 10,
+			fieldType: 'info',
+			field: 'DP'
+		});
 		vStream.resume();
 	});
 	vStream.on('end', function(){
@@ -186,6 +195,120 @@ exports.testVariantStreamWithInfoStringFilterExact = function(test){
 	vStream.on('end', function(){
 		test.expect(1);
 		test.equal(vStream.allVariants.length, 1, 'Filtering on INFO flag, exact match.');
+		test.done();
+	});
+};
+
+exports.testVariantStreamWithFormatStringFilterNoneAllSamples = function(test){
+	/**
+		Apply an info string filter for the genotype FORMAT field.
+		No samples can match the genotype.
+	*/
+	var vStream = new VCFStream('./test/SL281349.infostring.vcf');
+	vStream.once('header', function(){
+		vStream.addStringFilter({
+			fieldType: 'format',
+			string: '1/1',
+			field: 'GT',
+			matchType: 'none'
+		});
+		vStream.resume();
+	});
+	vStream.on('end', function(){
+		test.expect(1);
+		test.equal(vStream.allVariants.length, 1, 
+			'Filtering on FORMAT flag, "none" matchType.');
+		test.done();
+	});
+};
+
+exports.testVariantStreamWithFormatStringFilterAllSamples = function(test){
+	/**
+		Apply an info string filter for the genotype FORMAT field.
+		All samples can match the genotype.
+	*/
+	var vStream = new VCFStream('./test/SL281349.infostring.vcf');
+	vStream.once('header', function(){
+		vStream.addStringFilter({
+			fieldType: 'format',
+			string: '1/1',
+			field: 'GT',
+		});
+		vStream.resume();
+	});
+	vStream.on('end', function(){
+		test.expect(1);
+		test.equal(vStream.allVariants.length, 2, 
+			'Filtering on FORMAT flag');
+		test.done();
+	});
+};
+
+exports.testVariantStreamWithFormatStringFilterAnyAllSamples = function(test){
+	/**
+		Apply an info string filter for the genotype FORMAT field.
+		All samples can match the genotype.
+	*/
+	var vStream = new VCFStream('./test/SL281349.infostring.vcf');
+	vStream.once('header', function(){
+		vStream.addStringFilter({
+			fieldType: 'format',
+			string: '1/1',
+			field: 'GT',
+			matchType: 'any'
+		});
+		vStream.resume();
+	});
+	vStream.on('end', function(){
+		test.expect(1);
+		test.equal(vStream.allVariants.length, 3, 
+			'Filtering on FORMAT flag');
+		test.done();
+	});
+};
+
+exports.testVariantStreamWithFormatStringFilterOneSample = function(test){
+	/**
+		Apply an info string filter for the genotype FORMAT field.
+		All samples can match the genotype.
+	*/
+	var vStream = new VCFStream('./test/SL281349.infostring.vcf');
+	vStream.once('header', function(){
+		vStream.addSampleFilter(['SL241233']);
+		vStream.addStringFilter({
+			fieldType: 'format',
+			string: '1/1',
+			field: 'GT'
+		});
+		vStream.resume();
+	});
+	vStream.on('end', function(){
+		test.expect(1);
+		test.equal(vStream.allVariants.length, 2, 
+			'Filtering on FORMAT flag');
+		test.done();
+	});
+};
+
+exports.testVariantStreamWithFormatStringFilterOneOtherSample = function(test){
+	/**
+		Apply an info string filter for the genotype FORMAT field.
+		All samples can match the genotype.
+	*/
+	var vStream = new VCFStream('./test/SL281349.infostring.vcf');
+	vStream.once('header', function(){
+		vStream.addSampleFilter(['SL281349']);
+		vStream.addStringFilter({
+			fieldType: 'format',
+			string: '1/1',
+			field: 'GT'
+		});
+		vStream.resume();
+	});
+	vStream.on('end', function(){
+		test.expect(1);
+		test.equal(vStream.allVariants.length, 3, 
+			'Filtering on FORMAT flag');
 		test.done();
 	});
 };

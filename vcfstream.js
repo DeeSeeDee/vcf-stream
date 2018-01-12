@@ -29,10 +29,10 @@ class VCFStream extends EventEmitter{
 		this.contigs = {};
 		
 		/**
-			The formats property stores data about the FORMAT fields of
+			The format property stores data about the FORMAT fields of
 			each variant, based on the information from the header.
 		*/
-		this.formats = {};
+		this.format = {};
 		
 		/**
 			The info property stores data about the INFO fields of
@@ -123,7 +123,7 @@ class VCFStream extends EventEmitter{
 		
 		if(line.startsWith('##FORMAT')){
 			let headerParts = processHeaderField(line);
-			this.formats[headerParts[0][1]] = {
+			this.format[headerParts[0][1]] = {
 				number: headerParts[1][1],
 				type: headerParts[2][1],
 				description: headerParts[1][1]
@@ -141,6 +141,7 @@ class VCFStream extends EventEmitter{
 	}
 	
 	variantParse(line){
+		line = line.trim();
 		let fields = line.split('\t');
 		let contig = fields[0];
 		if(!this.variants.hasOwnProperty(contig)){
@@ -150,7 +151,7 @@ class VCFStream extends EventEmitter{
 			};
 		}
 		var newVariant = new Variant(fields, this.samples, 
-			this.formats, this.info, this.contigs[contig]);
+			this.format, this.info, this.contigs[contig]);
 		var failedFilters = false;
 		//Check position ranges
 		if(this.ranges.length){
@@ -217,35 +218,6 @@ class VCFStream extends EventEmitter{
 		} else {
 			this.filters.push(function(variant){
 				return !variant.info.hasOwnProperty(flagName);
-			});
-		}
-	}
-		
-	addInfoRangeFilter(infoProp, lowVal, highVal){
-		infoProp = infoProp.toUpperCase();
-		if(!this.info.hasOwnProperty(infoProp)){
-			throw {
-				name: 'FilterException',
-				message: `The INFO field ${infoProp} was not found in the VCF header`
-			};
-		}
-		if(['Integer', 'Float'].indexOf(this.info[infoProp].type) === -1){
-			throw {
-				name: 'FilterException',
-				message: `The INFO field ${infoProp} is not a numeric type`
-			};
-		}
-		lowVal = parseFloat(lowVal) || 0;
-		if(highVal){
-			highVal = parseFloat(highVal) || 0;
-		}
-		if(highVal){
-			this.filters.push(function(variant){
-				return variant.info[infoProp] >= lowVal && variant.info[infoProp] <= highVal;
-			});
-		} else {
-			this.filters.push(function(variant){
-				return variant.info[infoProp] >= lowVal;
 			});
 		}
 	}
@@ -351,6 +323,107 @@ class VCFStream extends EventEmitter{
 					});
 					break;
 			}
+		}
+	}
+	
+	/**
+		Filter by numeric range. Takes an object as its argument, 
+			with the following properties:
+		lowValue: Required. Integer or Float. The low end of the range.
+		field: Required. String. The INFO property on which to perform
+			the string match. This must be present in the header of the VCF, or an
+			Exception object with name "FilterException" will be thrown.
+		fieldType: Required. String. INFO or FORMAT.
+		highValue: Optional. Integer or Float. The high end of the range.
+		matchType: Optional. String. Applies only to INFO field values where the Number is 
+			something other than "1". Can have one of three values:			
+			'all': (Default) All items must meet the match criteria.
+			'any': At least one item must meet the match criteria.
+			'none': None of the items can meet the match criteria. 
+		samples: Optional. Array. A list of samples for which to apply the filter. 
+			Samples not in the list will be ignored. If the list is empty or absent, 
+			all	samples will be evaluated. This only applies to a FORMAT filter.
+	*/
+	addRangeFilter(filterProps){
+		['lowValue', 'field', 'fieldType'].forEach((reqProp) => {
+			if(!filterProps.hasOwnProperty(reqProp)){
+				throw {
+					name: 'FilterException',
+					message: `The required property ${reqProp} is missing.`
+				}
+			}
+		});
+		let lowVal = parseInt(filterProps.lowValue) || 0;
+		let field = filterProps.field.toUpperCase();
+		let fieldType = filterProps.fieldType.toLowerCase();
+		let matchType = (filterProps.matchType || 'all').toLowerCase();
+		let highVal = parseInt(filterProps.highValue) || null;
+		if(['format', 'info'].indexOf(fieldType) === -1){
+			throw {
+				name: 'FilterException',
+				message: `Invalid field type ${field} specified.`
+			};
+		}
+		if(!this[fieldType].hasOwnProperty(field)){
+			throw {
+				name: 'FilterException',
+				message: `The ${fieldType} field ${field} was not found in the VCF header`
+			};
+		}
+		if(['Integer', 'Float'].indexOf(this[fieldType][field].type) === -1){
+			throw {
+				name: 'FilterException',
+				message: `The ${fieldType} field ${infoProp} is not a numeric type`
+			};
+		}
+		
+		switch(matchType){
+			case 'none':
+				if(highVal){
+					this.filters.push((variant) => {
+						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+							return (infoVal < lowVal) || (infoVal > highVal);
+						});
+					});
+				} else {
+					this.filters.push((variant) => {
+						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+							return infoVal < lowVal;
+						});
+					});
+				}
+				break;
+			case 'any':
+				if(highVal){
+					this.filters.push((variant) => {
+						return variant.fieldValues(fieldType, field, this.samples).some((infoVal) => {
+							return infoVal >= lowVal && infoVal <= highVal;
+						});
+					});
+				} else {
+					this.filters.push((variant) => {
+						return variant.fieldValues(fieldType, field, this.samples).some((infoVal) => {
+							return infoVal >= lowVal;
+						});
+					});
+				}
+				break;
+			default:
+				//default to 'all'
+				if(highVal){
+					this.filters.push((variant) => {
+						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+							return infoVal >= lowVal && infoVal <= highVal;
+						});
+					});
+				} else {
+					this.filters.push((variant) => {
+						return variant.fieldValues(fieldType, field, this.samples).every((infoVal) => {
+							return infoVal >= lowVal;
+						});
+					});
+				}
+				break;
 		}
 	}
 	
