@@ -11,7 +11,6 @@ class VCFStream extends EventEmitter{
 		if(!fs.existsSync(vcfPath)){
 			throw(`The VCF path ${vcfPath} is not available.`);
 		}
-		var self = this;
 		this.header = [];
 		/*
 			This bind statement facilitates removing the event listener 
@@ -72,8 +71,8 @@ class VCFStream extends EventEmitter{
 		*/
 		this.stream.on('data', this.headerParse);
 		
-		this.stream.on('end', function(){
-			self.emit('end');
+		this.stream.on('end', () => {
+			this.emit('end');
 		});
 	}
 
@@ -222,11 +221,11 @@ class VCFStream extends EventEmitter{
 			Otherwise, the flag must be absent for the variant being examined.
 		*/
 		if(flagPresent){
-			this.filters.push(function(variant){
+			this.filters.push((variant) => {
 				return variant.info.hasOwnProperty(flagName);
 			});
 		} else {
-			this.filters.push(function(variant){
+			this.filters.push((variant) => {
 				return !variant.info.hasOwnProperty(flagName);
 			});
 		}
@@ -434,7 +433,7 @@ class VCFStream extends EventEmitter{
 	addSampleFilter(samples){
 		var newSamples = [];
 		samples.forEach((sample) => {
-			let foundSample = this.samples.find(function(s){
+			let foundSample = this.samples.find((s) => {
 				return s.name == sample;
 			});
 			if(foundSample){
@@ -446,9 +445,8 @@ class VCFStream extends EventEmitter{
 	
 	get allVariants(){
 		var variants = [];
-		var self = this;
-		Object.keys(this.variants).forEach(function(chrom){
-			variants = variants.concat(self.variants[chrom]);
+		Object.keys(this.variants).forEach((chrom) => {
+			variants = variants.concat(this.variants[chrom]);
 		});
 		return variants;
 	}
@@ -461,7 +459,7 @@ function processHeaderField(headerLine){
 	if(!headerParts.length){
 		headerParts = [interiorSection];
 	}
-	return headerParts.map(function(unit){
+	return headerParts.map((unit) => {
 		return unit.split('=');
 	});
 }
