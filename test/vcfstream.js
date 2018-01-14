@@ -43,12 +43,12 @@ exports.testVariantStreamSimple = function(test){
 	});
 };
 
-exports.testVariantStreamWithRange = function(test){
+exports.testVariantStreamWithInterval = function(test){
 	/**
-		Apply a range filter with a defined start and end.
+		Apply a interval filter with a defined start and end.
 	*/
 	var vStream = new VCFStream('./test/SL281349.head.vcf');
-	vStream.addRange('chr1', 20304, 40000);
+	vStream.addInterval('chr1', 20304, 40000);
 	vStream.once('header', function(){
 		vStream.resume();
 	});
@@ -64,12 +64,12 @@ exports.testVariantStreamWithRange = function(test){
 	});
 };
 
-exports.testVariantStreamWithRangeOpen = function(test){
+exports.testVariantStreamWithIntervalOpen = function(test){
 	/**
-		Apply a range filter with a defined start and no end.
+		Apply a interval filter with a defined start and no end.
 	*/
 	var vStream = new VCFStream('./test/SL281349.head.vcf');
-	vStream.addRange('chr1', 237800);
+	vStream.addInterval('chr1', 237800);
 	vStream.once('header', function(){
 		vStream.resume();
 	});
@@ -119,7 +119,7 @@ exports.testVariantStreamWithInfoFlagFilterInverse = function(test){
 
 exports.testVariantStreamWithInfoRangeFilter = function(test){
 	/**
-		Apply an info flag filter ("DB" in this case), but for the absence of the flag.
+		Apply an info range flag filter ("DB" in this case).
 	*/
 	var vStream = new VCFStream('./test/SL281349.head.vcf');
 	vStream.once('header', function(){

@@ -53,9 +53,9 @@ class VCFStream extends EventEmitter{
 		this.samplesFilter = [];
 
 		/**
-			This array stores the position range filters
+			This array stores the positional filters
 		*/
-		this.ranges = [];
+		this.intervals = [];
 		
 		/**
 			A collection of filters to apply to variants being streamed.
@@ -163,15 +163,15 @@ class VCFStream extends EventEmitter{
 			this.format, this.info, this.contigs[contig]);
 		var failedFilters = false;
 		//Check position ranges
-		if(this.ranges.length){
-			if(!this.ranges.filter((range) => {
-				return contig === range.chrom;
-			}).some((range) => {
-				if(range.endPos){
-					return newVariant.position >= range.startPos 
-						&& newVariant.position <= range.endPos;
+		if(this.intervals.length){
+			if(!this.intervals.filter((interval) => {
+				return contig === interval.chrom;
+			}).some((interval) => {
+				if(interval.endPos){
+					return newVariant.position >= interval.startPos 
+						&& newVariant.position <= interval.endPos;
 				} else {
-					return newVariant.position >= range.startPos;
+					return newVariant.position >= interval.startPos;
 				}
 			})){
 				failedFilters = true;
@@ -191,7 +191,11 @@ class VCFStream extends EventEmitter{
 		}
 	}
 	
-	addRange(chrom, startPos, endPos){
+	/**
+	 * If one or more `intervals` exist, only
+	 * variants within those intervals will be considered.
+	 */
+	addInterval(chrom, startPos, endPos){
 		var filterData = {
 			chrom: chrom,
 			startPos: parseInt(startPos) || 0
@@ -199,9 +203,15 @@ class VCFStream extends EventEmitter{
 		if(endPos){
 			filterData['endPos'] = parseInt(endPos) || 0;
 		}
-		this.ranges.push(filterData);
+		this.intervals.push(filterData);
 	}
 	
+	/**
+		This is used to filter based on INFO fields which have a type
+		of "Flag". If `flagPresent` is truthy, the flag must be set on 
+		a variant. Otherwise, the flag must be absent for the variant 
+		being examined.
+	 */
 	addInfoFlagFilter(flagName, flagPresent){
 		flagName = flagName.toUpperCase();
 		if(!this.info.hasOwnProperty(flagName)){
@@ -216,10 +226,6 @@ class VCFStream extends EventEmitter{
 				message: `The INFO field ${flagName} is not a "Flag" type`
 			};
 		}
-		/**
-			If `flagPresent` is truthy, the flag must be set on a variant
-			Otherwise, the flag must be absent for the variant being examined.
-		*/
 		if(flagPresent){
 			this.filters.push((variant) => {
 				return variant.info.hasOwnProperty(flagName);
@@ -430,6 +436,11 @@ class VCFStream extends EventEmitter{
 		}
 	}
 	
+	/**
+		Pass an array of samples to be used in filtering
+		operations. Samples in the list not present in the
+		VCF header will be ignored.
+	*/
 	addSampleFilter(samples){
 		var newSamples = [];
 		samples.forEach((sample) => {
